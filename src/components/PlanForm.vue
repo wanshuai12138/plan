@@ -77,7 +77,7 @@
     </el-form-item>
     
     <el-form-item label="MD文档">
-      <el-tabs>
+      <el-tabs style="min-width: 100%">
         <el-tab-pane label="编辑">
           <el-input
             v-model="form.markdownContent"

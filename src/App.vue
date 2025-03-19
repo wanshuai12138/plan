@@ -12,7 +12,7 @@ export default {
 <template>
   <div class="app-container">
     <header class="app-header">
-      <h1>简约计划工具</h1>
+      <h1>计划工具</h1>
       <p>每日计划管理，支持Markdown文档关联</p>
     </header>
     
@@ -49,6 +49,7 @@ body {
 }
 
 .app-container {
+  width: 1270px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

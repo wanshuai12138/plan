@@ -41,21 +41,21 @@
       
       <div class="header-buttons">
         <el-button type="primary" size="small" @click="showAddForm" :disabled="formVisible">
-          <i class="el-icon-plus"></i> 新建计划
+          <el-icon><Plus /></el-icon> 新建计划
         </el-button>
         
         <el-button @click="exportData" type="success" size="small">
-          <i class="el-icon-download"></i> 导出
+          <el-icon><Download /></el-icon> 导出
         </el-button>
         
         <el-button @click="showImportDialog" type="warning" size="small">
-          <i class="el-icon-upload2"></i> 导入
+          <el-icon><Upload /></el-icon> 导入
         </el-button>
         
         <el-button type="info" size="small" @click="importTestData">测试数据</el-button>
         
         <el-button @click="resetApp" type="danger" size="small">
-          <i class="el-icon-delete"></i> 重置
+          <el-icon><Delete /></el-icon> 重置
         </el-button>
       </div>
     </div>
@@ -84,7 +84,7 @@
       <!-- 计划列表 -->
       <div class="plan-list">
         <div v-if="filteredPlans.length === 0" class="empty-state">
-          <i class="el-icon-document"></i>
+          <el-icon :size="60"><Document /></el-icon>
           <p>暂无计划</p>
           <el-button type="primary" size="small" @click="showAddForm">
             创建第一个计划
@@ -128,7 +128,9 @@
                 </div>
               </div>
               
-              <div class="plan-date">{{ formatDate(plan.date) }}</div>
+              <div class="plan-date">
+                <el-icon><Calendar /></el-icon> {{ formatDate(plan.date) }}
+              </div>
             </div>
             
             <div class="plan-description">{{ plan.description }}</div>
@@ -149,14 +151,14 @@
             
             <div class="plan-actions">
               <el-button size="mini" type="text" @click.stop="editPlan(plan)">
-                <i class="el-icon-edit"></i> 编辑
+                <el-icon><Edit /></el-icon> 编辑
               </el-button>
               <el-button size="mini" type="text" @click.stop="deletePlan(plan.id)">
-                <i class="el-icon-delete"></i> 删除
+                <el-icon><Delete /></el-icon> 删除
               </el-button>
             </div>
             <div class="drag-handle">
-              <i class="el-icon-rank"></i>
+              <el-icon><Rank /></el-icon>
             </div>
           </div>
         </transition-group>
@@ -170,7 +172,7 @@
               <h3>{{ selectedPlan.title }}</h3>
               <div class="detail-meta">
                 <div class="detail-date">
-                  <i class="el-icon-date"></i> {{ formatDate(selectedPlan.date) }}
+                  <el-icon><Calendar /></el-icon> {{ formatDate(selectedPlan.date) }}
                 </div>
                 <div class="detail-status">
                   <el-tag :type="selectedPlan.completed ? 'success' : 'info'" effect="dark">
@@ -207,34 +209,34 @@
             
             <div class="detail-actions">
               <el-button type="primary" size="small" @click="editPlan(selectedPlan)">
-                <i class="el-icon-edit"></i> 编辑计划
+                <el-icon><Edit /></el-icon> 编辑计划
               </el-button>
               <el-button 
                 type="success" 
                 size="small" 
                 v-if="!selectedPlan.completed"
                 @click="() => { selectedPlan.completed = true; updatePlan(selectedPlan); }">
-                <i class="el-icon-check"></i> 标记为已完成
+                <el-icon><Check /></el-icon> 标记为已完成
               </el-button>
               <el-button 
                 type="info" 
                 size="small" 
                 v-else
                 @click="() => { selectedPlan.completed = false; updatePlan(selectedPlan); }">
-                <i class="el-icon-refresh-left"></i> 标记为进行中
+                <el-icon><RefreshLeft /></el-icon> 标记为进行中
               </el-button>
               <el-button type="danger" size="small" @click="deletePlan(selectedPlan.id)">
-                <i class="el-icon-delete"></i> 删除计划
+                <el-icon><Delete /></el-icon> 删除计划
               </el-button>
             </div>
           </div>
           <div v-else class="empty-detail">
             <div class="empty-illustration">
-              <i class="el-icon-document"></i>
+              <el-icon :size="80"><Document /></el-icon>
             </div>
             <p>选择一个计划查看详情</p>
             <el-button type="primary" size="small" @click="showAddForm">
-              <i class="el-icon-plus"></i> 新建计划
+              <el-icon><Plus /></el-icon> 新建计划
             </el-button>
           </div>
         </transition>
@@ -249,7 +251,7 @@
     <!-- 导入对话框 -->
     <el-dialog
       title="导入计划数据"
-      :visible.sync="importDialogVisible"
+      v-model="importDialogVisible"
       width="500px"
       @close="cancelImport">
       <div class="import-container">
@@ -274,19 +276,41 @@
           <p>发现 {{ importPreview.count }} 个计划</p>
         </div>
         
-        <div class="debug-area" style="display: none;">
+        <div class="debug-area" style="display: block;">
           <p>导入状态: {{ importData ? '数据已加载' : '未加载数据' }}</p>
           <p>已选文件: {{ selectedFile ? selectedFile.name : '未选择文件' }}</p>
+          <p>对话框可见性: {{ importDialogVisible }}</p>
         </div>
       </div>
       
-      <div slot="footer" class="dialog-footer">
-        <el-button @click="cancelImport">取消</el-button>
-        <el-button type="primary" @click="confirmImport" :disabled="!selectedFile">
-          确认导入
-        </el-button>
-      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="cancelImport">取消</el-button>
+          <el-button type="primary" @click="confirmImport" :disabled="!selectedFile">
+            确认导入
+          </el-button>
+        </div>
+      </template>
     </el-dialog>
+
+    <!-- 调试按钮和信息 -->
+    <div class="debug-panel" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); display: block;">
+      <h4>调试面板</h4>
+      <p>导入对话框状态: {{ importDialogVisible ? '打开' : '关闭' }}</p>
+      <el-button @click="importDialogVisible = true" type="primary" size="small">
+        直接打开对话框
+      </el-button>
+      <el-button @click="importTestData" type="success" size="small">
+        测试数据导入
+      </el-button>
+    </div>
+
+    <!-- 主题切换按钮 -->
+    <div class="theme-toggle" @click="toggleTheme">
+      <el-icon>
+        <component :is="darkTheme ? 'Sunny' : 'Moon'" />
+      </el-icon>
+    </div>
   </div>
 </template>
 
@@ -295,12 +319,29 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import PlanItem from './PlanItem.vue';
 import PlanForm from './PlanForm.vue';
 import { marked } from 'marked';
+// 导入Element Plus需要的图标
+import { Upload, Download, Plus, Delete, Document, Edit, Calendar, Check, RefreshLeft, DocumentAdd, Rank, Collection, Sunny, Moon } from '@element-plus/icons-vue';
 
 export default {
   name: 'PlanList',
   components: {
     PlanItem,
-    PlanForm
+    PlanForm,
+    // 注册图标组件
+    Upload,
+    Download,
+    Plus,
+    Delete,
+    Document,
+    Edit,
+    Calendar,
+    Check,
+    RefreshLeft,
+    DocumentAdd,
+    Rank,
+    Collection,
+    Sunny,
+    Moon
   },
   setup() {
     console.log('PlanList组件初始化');
@@ -416,7 +457,7 @@ export default {
       draggedItem.value = plan;
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', plan.id);
-      
+
       // 修改拖拽时的图像效果
       const dragImage = event.target.cloneNode(true);
       dragImage.style.opacity = '0.6';
@@ -424,47 +465,47 @@ export default {
       dragImage.style.top = '-1000px';
       document.body.appendChild(dragImage);
       event.dataTransfer.setDragImage(dragImage, 0, 0);
-      
+
       setTimeout(() => {
         document.body.removeChild(dragImage);
       }, 0);
     };
-    
+
     // 拖拽进入
     const onDragOver = (event, index) => {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
     };
-    
+
     // 放置
     const onDrop = (event, targetPlan) => {
       event.preventDefault();
       if (!isDragging.value || !draggedItem.value) return;
-      
+
       const draggedId = draggedItem.value.id;
       const targetId = targetPlan.id;
-      
+
       if (draggedId === targetId) return;
-      
+
       // 获取拖拽项和目标项的索引
       const draggedIndex = plans.value.findIndex(p => p.id === draggedId);
       const targetIndex = plans.value.findIndex(p => p.id === targetId);
-      
+
       if (draggedIndex === -1 || targetIndex === -1) return;
-      
+
       // 创建新数组，将拖拽项移动到目标位置
       const newPlans = [...plans.value];
       const [removed] = newPlans.splice(draggedIndex, 1);
       newPlans.splice(targetIndex, 0, removed);
-      
+
       // 更新数组
       plans.value = newPlans;
       savePlansToStorage();
-      
+
       isDragging.value = false;
       draggedItem.value = null;
     };
-    
+
     // 结束拖拽
     const onDragEnd = () => {
       isDragging.value = false;
@@ -799,12 +840,24 @@ export default {
     
     // 显示导入对话框
     const showImportDialog = () => {
-      console.log('显示导入对话框');
+      console.log('显示导入对话框 - 开始');
       // 重置导入状态
       importData.value = null;
       importPreview.value = null;
       selectedFile.value = null;
-      importDialogVisible.value = true;
+      
+      // 确保将对话框设置为可见
+      setTimeout(() => {
+        importDialogVisible.value = true;
+        console.log('设置importDialogVisible为:', importDialogVisible.value);
+        
+        // 调试：打印所有响应式变量的状态
+        console.log('导入对话框状态变量:', {
+          importDialogVisible: importDialogVisible.value,
+          selectedFile: selectedFile.value,
+          importData: importData.value
+        });
+      }, 0);
     };
     
     // 触发文件选择
@@ -1125,6 +1178,7 @@ export default {
       selectedFile,
       triggerFileSelect,
       cancelImport,
+      exportData,
       // 新增功能
       selectPlan,
       formatDate,
@@ -1371,12 +1425,6 @@ export default {
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.plan-date::before {
-  content: '\e78f'; /* el-icon-date 的 unicode */
-  font-family: 'element-icons';
-  font-size: 12px;
 }
 
 .plan-description {
@@ -1815,5 +1863,21 @@ export default {
     max-height: 300px;
     padding: 10px;
   }
+}
+
+/* 主题切换按钮 */
+.theme-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  background: white;
+  padding: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: #e0e0e0;
 }
 </style> 
