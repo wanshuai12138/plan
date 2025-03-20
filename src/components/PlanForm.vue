@@ -27,8 +27,25 @@
       </el-radio-group>
     </el-form-item>
     
+    <el-form-item label="项目">
+      <el-select v-model="form.projectId" placeholder="选择项目" style="width: 100%">
+        <el-option 
+          v-for="project in projects" 
+          :key="project.id" 
+          :label="project.name" 
+          :value="project.id">
+          <div class="project-option">
+            <span class="project-dot" :style="{backgroundColor: project.color}"></span>
+            <span>{{ project.name }}</span>
+          </div>
+        </el-option>
+        <el-option :value="null" label="无项目"></el-option>
+      </el-select>
+    </el-form-item>
+    
     <el-form-item label="标签">
       <div class="tags-container">
+        <!-- 预设标签 -->
         <div 
           v-for="tag in availableTags" 
           :key="tag.name"
@@ -40,6 +57,21 @@
           }"
           @click="toggleTag(tag.name)">
           {{ tag.name }}
+        </div>
+        
+        <!-- 自定义标签 -->
+        <div 
+          v-for="tag in customTags" 
+          :key="tag"
+          class="tag-item custom-tag selected"
+          :style="{ 
+            borderColor: '#67c23a', 
+            backgroundColor: '#67c23a',
+            color: '#fff'
+          }"
+          @click="toggleTag(tag)">
+          {{ tag }}
+          <span class="tag-close" @click.stop="removeTag(tag)">×</span>
         </div>
         
         <div class="add-tag-container">
@@ -56,7 +88,7 @@
             size="small" 
             type="text" 
             @click="showCustomTagInput = true">
-            <i class="el-icon-plus"></i> 添加自定义标签
+            <el-icon><Plus /></el-icon> 添加自定义标签
           </el-button>
         </div>
       </div>
@@ -102,9 +134,13 @@
 <script>
 import { reactive, computed, ref } from 'vue';
 import { marked } from 'marked';
+import { Plus } from '@element-plus/icons-vue';
 
 export default {
   name: 'PlanForm',
+  components: {
+    Plus
+  },
   props: {
     plan: {
       type: Object,
@@ -131,6 +167,10 @@ export default {
         { value: 'medium', label: '中', color: '#e6a23c' },
         { value: 'low', label: '低', color: '#55cc77' }
       ]
+    },
+    projects: {
+      type: Array,
+      default: () => []
     }
   },
   setup(props, { emit }) {
@@ -144,7 +184,8 @@ export default {
       completed: props.plan.completed,
       priority: props.plan.priority || 'medium',
       tags: Array.isArray(props.plan.tags) ? [...props.plan.tags] : [],
-      color: props.plan.color || ''
+      color: props.plan.color || '',
+      projectId: props.plan.projectId || null
     });
 
     // 标签相关
@@ -178,6 +219,20 @@ export default {
       return form.markdownContent ? marked(form.markdownContent) : '';
     });
 
+    // 在setup函数中，添加自定义标签相关逻辑
+    const customTags = computed(() => {
+      // 筛选出不在预设标签中的自定义标签
+      return form.tags.filter(tag => !props.availableTags.some(avTag => avTag.name === tag));
+    });
+
+    // 移除标签
+    const removeTag = (tagName) => {
+      const index = form.tags.indexOf(tagName);
+      if (index > -1) {
+        form.tags.splice(index, 1);
+      }
+    };
+
     // 提交表单
     const submitForm = () => {
       console.log('表单提交内容:', form);
@@ -203,7 +258,8 @@ export default {
         completed: form.completed || false,
         priority: form.priority || 'medium',
         tags: [...form.tags],
-        color: form.color || ''
+        color: form.color || '',
+        projectId: form.projectId
       };
 
       console.log('准备提交的计划:', plan);
@@ -219,7 +275,9 @@ export default {
       showCustomTagInput,
       customTag,
       toggleTag,
-      addCustomTag
+      addCustomTag,
+      customTags,
+      removeTag
     };
   }
 }
@@ -295,6 +353,31 @@ export default {
 
 .tag-item.selected {
   font-weight: 500;
+}
+
+.tag-item.custom-tag {
+  position: relative;
+  padding-right: 25px;
+}
+
+.tag-close {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.tag-close:hover {
+  background-color: rgba(255, 255, 255, 0.4);
 }
 
 .add-tag-container {

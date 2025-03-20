@@ -25,6 +25,20 @@
             </el-option>
           </el-select>
           
+          <el-select v-model="projectFilter" size="small" placeholder="项目" class="project-filter">
+            <el-option value="all" label="所有项目" />
+            <el-option 
+              v-for="project in projects" 
+              :key="project.id" 
+              :label="project.name" 
+              :value="project.id.toString()">
+              <div class="project-option">
+                <span class="project-dot" :style="{backgroundColor: project.color}"></span>
+                <span>{{ project.name }}</span>
+              </div>
+            </el-option>
+          </el-select>
+          
           <el-date-picker
             v-model="dateFilter"
             type="daterange"
@@ -44,6 +58,10 @@
           <el-icon><Plus /></el-icon> 新建计划
         </el-button>
         
+        <el-button type="primary" size="small" @click="showProjectDialog">
+          <el-icon><Folder /></el-icon> 项目管理
+        </el-button>
+        
         <el-button @click="exportData" type="success" size="small">
           <el-icon><Download /></el-icon> 导出
         </el-button>
@@ -61,21 +79,19 @@
     </div>
 
     <!-- 标签过滤器 -->
-    <div class="tag-filters" v-if="availableTags.length > 0">
+    <div class="tag-filters">
       <div 
-        v-for="tag in availableTags" 
-        :key="tag.name" 
-        class="tag-filter" 
-        :class="{ active: tagFilter === tag.name }"
-        :style="{ borderColor: tag.color, color: tagFilter === tag.name ? '#fff' : tag.color, backgroundColor: tagFilter === tag.name ? tag.color : 'transparent' }"
+        v-for="tag in allAvailableTags" 
+        :key="tag.name"
+        :class="['tag-filter', { active: selectedTags.includes(tag.name) }]"
+        :style="{ 
+          borderColor: tag.color, 
+          backgroundColor: selectedTags.includes(tag.name) ? tag.color : 'transparent',
+          color: selectedTags.includes(tag.name) ? '#fff' : tag.color
+        }"
         @click="toggleTagFilter(tag.name)">
         {{ tag.name }}
-      </div>
-      <div 
-        v-if="tagFilter" 
-        class="tag-filter clear-filter"
-        @click="tagFilter = ''">
-        清除筛选
+        <el-icon v-if="tag.isCustom" class="custom-tag-icon"><Edit /></el-icon>
       </div>
     </div>
     
@@ -128,8 +144,19 @@
                 </div>
               </div>
               
-              <div class="plan-date">
-                <el-icon><Calendar /></el-icon> {{ formatDate(plan.date) }}
+              <div class="plan-meta">
+                <div class="plan-date">
+                  <el-icon><Calendar /></el-icon> {{ formatDate(plan.date) }}
+                </div>
+                
+                <!-- 添加项目标识 -->
+                <div v-if="plan.projectId" class="plan-project">
+                  <el-tag 
+                    size="mini" 
+                    :style="{ backgroundColor: getProjectInfo(plan.projectId)?.color, color: '#fff', border: 'none' }">
+                    {{ getProjectInfo(plan.projectId)?.name }}
+                  </el-tag>
+                </div>
               </div>
             </div>
             
@@ -184,6 +211,13 @@
                     :type="selectedPlan.priority === 'high' ? 'danger' : selectedPlan.priority === 'medium' ? 'warning' : 'success'"
                     effect="plain">
                     {{ getPriorityInfo(selectedPlan.priority).label }}优先级
+                  </el-tag>
+                </div>
+                <!-- 添加项目信息 -->
+                <div v-if="selectedPlan.projectId" class="detail-project">
+                  <el-tag 
+                    :style="{ backgroundColor: getProjectInfo(selectedPlan.projectId)?.color, color: '#fff', border: 'none' }">
+                    项目: {{ getProjectInfo(selectedPlan.projectId)?.name }}
                   </el-tag>
                 </div>
               </div>
@@ -244,7 +278,13 @@
       
       <!-- 表单容器 -->
       <div class="form-container" v-if="formVisible">
-        <PlanForm :plan="currentPlan" @save="savePlan" @cancel="hideForm" :availableTags="availableTags" :priorityOptions="priorityOptions" />
+        <PlanForm 
+          :plan="currentPlan" 
+          @save="savePlan" 
+          @cancel="hideForm" 
+          :availableTags="availableTags" 
+          :priorityOptions="priorityOptions"
+          :projects="projects" />
       </div>
     </div>
     
@@ -256,27 +296,38 @@
       @close="cancelImport">
       <div class="import-container">
         <div class="file-upload">
-          <el-upload
-            action="#"
-            :auto-upload="false"
-            :show-file-list="false"
-            :on-change="handleFileChange"
-            accept=".json">
-            <el-button type="primary" @click="triggerFileSelect">
-              选择文件
-            </el-button>
-            <input ref="fileInput" type="file" id="file-input" accept=".json" @change="handleFileChange" style="display:none">
-          </el-upload>
+          <!-- 移除el-upload组件，使用简单的按钮和input -->
+          <el-button type="primary" @click="triggerFileSelect">
+            选择文件
+          </el-button>
+          <input 
+            ref="fileInput" 
+            type="file" 
+            id="file-input" 
+            accept=".json" 
+            @change="handleFileChange" 
+            style="display:none">
+          
           <div v-if="selectedFile" class="selected-file">
             <p>已选择文件: {{ selectedFile.name }}</p>
           </div>
         </div>
         
         <div v-if="importPreview" class="import-preview">
-          <p>发现 {{ importPreview.count }} 个计划</p>
+          <p v-if="importPreview.format === 'new'">
+            检测到新格式数据，包含:
+            <ul>
+              <li>{{ importPreview.count }} 个计划</li>
+              <li>{{ importPreview.projectCount }} 个项目</li>
+              <li>版本: {{ importPreview.version }}</li>
+            </ul>
+          </p>
+          <p v-else>
+            检测到旧格式数据，包含 {{ importPreview.count }} 个计划
+          </p>
         </div>
         
-        <div class="debug-area" style="display: block;">
+        <div class="debug-area" style="display: none;">
           <p>导入状态: {{ importData ? '数据已加载' : '未加载数据' }}</p>
           <p>已选文件: {{ selectedFile ? selectedFile.name : '未选择文件' }}</p>
           <p>对话框可见性: {{ importDialogVisible }}</p>
@@ -311,6 +362,59 @@
         <component :is="darkTheme ? 'Sunny' : 'Moon'" />
       </el-icon>
     </div>
+
+    <!-- 项目管理对话框 -->
+    <el-dialog
+      title="项目管理"
+      v-model="projectDialogVisible"
+      width="500px"
+      @close="hideProjectDialog">
+      <div class="project-container">
+        <div class="project-list">
+          <div v-if="projects.length === 0" class="empty-state">
+            <el-icon :size="60"><Document /></el-icon>
+            <p>暂无项目</p>
+            <el-button type="primary" size="small" @click="showProjectDialog">
+              添加新项目
+            </el-button>
+          </div>
+          
+          <transition-group name="project-list" tag="div" class="projects-transition-group">
+            <div
+              v-for="project in projects"
+              :key="project.id"
+              class="project-item"
+              @click="startEditProject(project)">
+              <div class="project-item-header">
+                <div class="project-title">{{ project.name }}</div>
+              </div>
+              <div class="project-actions">
+                <el-button size="mini" type="text" @click.stop="deleteProject(project)">
+                  <el-icon><Delete /></el-icon> 删除
+                </el-button>
+              </div>
+            </div>
+          </transition-group>
+        </div>
+        
+        <div class="form-container">
+          <el-form
+            :model="editingProject"
+            :rules="projectRules"
+            @submit.prevent="updateProject">
+            <el-form-item label="项目名称">
+              <el-input v-model="newProjectName" />
+            </el-form-item>
+            <el-form-item label="项目颜色">
+              <el-color-picker v-model="newProjectColor" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="addProject">添加项目</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -320,7 +424,7 @@ import PlanItem from './PlanItem.vue';
 import PlanForm from './PlanForm.vue';
 import { marked } from 'marked';
 // 导入Element Plus需要的图标
-import { Upload, Download, Plus, Delete, Document, Edit, Calendar, Check, RefreshLeft, DocumentAdd, Rank, Collection, Sunny, Moon } from '@element-plus/icons-vue';
+import { Upload, Download, Plus, Delete, Document, Edit, Calendar, Check, RefreshLeft, DocumentAdd, Rank, Collection, Sunny, Moon, Folder } from '@element-plus/icons-vue';
 
 export default {
   name: 'PlanList',
@@ -341,7 +445,8 @@ export default {
     Rank,
     Collection,
     Sunny,
-    Moon
+    Moon,
+    Folder
   },
   setup() {
     console.log('PlanList组件初始化');
@@ -361,6 +466,16 @@ export default {
     // 表单显示控制
     const formVisible = ref(false);
     
+    // 项目数据
+    const projects = ref([
+      { id: 1, name: '个人', color: '#409EFF' },
+      { id: 2, name: '工作', color: '#67C23A' },
+      { id: 3, name: '学习', color: '#E6A23C' }
+    ]);
+    
+    // 项目过滤器
+    const projectFilter = ref('all');
+    
     // 当前编辑的计划
     const currentPlan = ref({
       id: null,
@@ -369,9 +484,10 @@ export default {
       description: '',
       markdownContent: '',
       completed: false,
-      priority: 'medium', // 新增：优先级字段
-      tags: [], // 新增：标签字段
-      color: '' // 新增：颜色字段
+      priority: 'medium', // 优先级字段
+      tags: [], // 标签字段
+      color: '', // 颜色字段
+      projectId: null // 新增：项目ID字段
     });
     
     // 选中的计划（用于详情显示）
@@ -384,8 +500,12 @@ export default {
       start: null,
       end: null
     });
-    const tagFilter = ref(''); // 新增：标签过滤
+    const tagFilter = ref(''); // 单标签筛选（旧版）
+    const selectedTags = ref([]); // 多标签筛选（新版）
     const priorityFilter = ref('all'); // 新增：优先级过滤
+    const selectedPriority = ref(''); // 新版优先级筛选
+    const selectedProject = ref(''); // 新版项目筛选
+    const showCompleted = ref(true); // 是否显示已完成的计划
     
     // 拖拽相关
     const isDragging = ref(false);
@@ -416,6 +536,12 @@ export default {
       { value: 'medium', label: '中', color: '#e6a23c' },
       { value: 'low', label: '低', color: '#55cc77' }
     ];
+    
+    // 项目管理对话框
+    const projectDialogVisible = ref(false);
+    const editingProject = ref(null);
+    const newProjectName = ref('');
+    const newProjectColor = ref('#409EFF');
     
     // 选择计划
     const selectPlan = (plan) => {
@@ -512,75 +638,75 @@ export default {
       draggedItem.value = null;
     };
 
-    // 根据过滤条件显示计划
+    // 根据标签筛选计划
     const filteredPlans = computed(() => {
-      console.log('过滤前计划数:', plans.value.length);
-      console.log('当前过滤条件:', { 
-        status: filter.value, 
-        dateRange,
-        tag: tagFilter.value,
-        priority: priorityFilter.value
-      });
+      let result = plans.value;
       
-      if (!Array.isArray(plans.value)) {
-        console.warn('计划数据不是数组');
-        return [];
+      // 按标签筛选
+      if (selectedTags.value.length > 0) {
+        result = result.filter(plan => {
+          // 检查计划是否包含任何选中的标签
+          return selectedTags.value.some(tag => {
+            // 如果是预设标签，直接检查
+            if (availableTags.value.some(t => t.name === tag)) {
+              return plan.tags.includes(tag);
+            }
+            // 如果是自定义标签，检查是否在自定义标签列表中
+            return plan.tags.includes(tag);
+          });
+        });
       }
       
-      const filtered = plans.value
-        .filter(plan => {
-          // 状态过滤
-          if (filter.value === 'active' && plan.completed) return false;
-          if (filter.value === 'completed' && !plan.completed) return false;
-          
-          // 日期过滤
-          if (dateRange.start && dateRange.end) {
-            const planDate = new Date(plan.date);
-            if (isNaN(planDate.getTime())) {
-              console.warn('计划日期无效:', plan.date);
-              return true; // 保留无效日期的计划
-            }
-            
-            if (planDate < dateRange.start || planDate > dateRange.end) {
-              return false;
-            }
-          }
-          
-          // 标签过滤
-          if (tagFilter.value && (!plan.tags || !plan.tags.includes(tagFilter.value))) {
-            return false;
-          }
-          
-          // 优先级过滤
-          if (priorityFilter.value !== 'all' && plan.priority !== priorityFilter.value) {
-            return false;
-          }
-          
-          return true;
-        })
-        .sort((a, b) => {
-          // 首先按优先级排序（高 > 中 > 低）
-          const priorityOrder = { high: 0, medium: 1, low: 2 };
-          const priorityA = priorityOrder[a.priority] ?? 1; // 默认中等优先级
-          const priorityB = priorityOrder[b.priority] ?? 1;
-          
-          if (priorityA !== priorityB) {
-            return priorityA - priorityB;
-          }
-          
-          // 其次按日期降序排列
-          const dateA = new Date(a.date);
-          const dateB = new Date(b.date);
-          
-          if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
-            return 0; // 如果日期无效，不改变顺序
-          }
-          
-          return dateB - dateA;
+      // 按优先级筛选
+      if (selectedPriority.value) {
+        result = result.filter(plan => plan.priority === selectedPriority.value);
+      }
+      
+      // 按项目筛选
+      if (selectedProject.value) {
+        result = result.filter(plan => plan.projectId === selectedProject.value);
+      }
+      
+      // 按完成状态筛选
+      if (showCompleted.value === false) {
+        result = result.filter(plan => !plan.completed);
+      }
+      
+      // 按日期筛选
+      if (dateRange.value && dateRange.value.length === 2) {
+        const startDate = new Date(dateRange.value[0]);
+        const endDate = new Date(dateRange.value[1]);
+        result = result.filter(plan => {
+          const planDate = new Date(plan.date);
+          return planDate >= startDate && planDate <= endDate;
         });
-        
-      console.log('过滤后计划数:', filtered.length);
-      return filtered;
+      }
+      
+      return result;
+    });
+
+    // 获取所有可用的标签（包括预设标签和自定义标签）
+    const allAvailableTags = computed(() => {
+      // 获取所有计划中的自定义标签
+      const customTags = new Set();
+      plans.value.forEach(plan => {
+        plan.tags.forEach(tag => {
+          // 如果标签不在预设标签中，则为自定义标签
+          if (!availableTags.value.some(t => t.name === tag)) {
+            customTags.add(tag);
+          }
+        });
+      });
+
+      // 合并预设标签和自定义标签
+      return [
+        ...availableTags.value,
+        ...Array.from(customTags).map(tag => ({
+          name: tag,
+          color: '#67c23a', // 自定义标签使用绿色
+          isCustom: true
+        }))
+      ];
     });
     
     // 保存计划
@@ -597,7 +723,8 @@ export default {
         completed: plan.completed || false,
         priority: plan.priority || 'medium',
         tags: Array.isArray(plan.tags) ? plan.tags : [],
-        color: plan.color || ''
+        color: plan.color || '',
+        projectId: plan.projectId || null // 新增：保存项目ID
       };
       
       // 使用新数组替换原数组，确保响应式更新
@@ -633,16 +760,27 @@ export default {
       dateRange.start = null;
       dateRange.end = null;
       tagFilter.value = '';
+      selectedTags.value = []; // 重置多标签筛选
       priorityFilter.value = 'all';
+      selectedPriority.value = '';
+      selectedProject.value = '';
+      projectFilter.value = 'all'; // 新增：重置项目过滤
+      showCompleted.value = true;
     };
     
-    // 切换标签过滤
+    // 切换标签过滤（更新为多标签选择）
     const toggleTagFilter = (tag) => {
-      if (tagFilter.value === tag) {
-        tagFilter.value = ''; // 取消过滤
+      // 如果该标签已经被选中，则移除它
+      const index = selectedTags.value.indexOf(tag);
+      if (index !== -1) {
+        selectedTags.value.splice(index, 1);
       } else {
-        tagFilter.value = tag; // 设置过滤
+        // 否则添加该标签到选中列表
+        selectedTags.value.push(tag);
       }
+      
+      // 兼容旧版单标签筛选（可选）
+      tagFilter.value = selectedTags.value.length === 1 ? selectedTags.value[0] : '';
     };
     
     // 组件挂载时加载数据
@@ -654,6 +792,9 @@ export default {
 
       // 加载已有计划
       loadPlans();
+      
+      // 加载项目数据
+      loadProjects();
       
       // 确保plans是一个数组
       if (!Array.isArray(plans.value)) {
@@ -674,7 +815,8 @@ export default {
           completed: false,
           priority: 'medium',
           tags: ['示例'],
-          color: '#4b90ff'
+          color: '#4b90ff',
+          projectId: 1 // 工作项目
         };
         
         // 直接设置新数组，而不是push
@@ -709,7 +851,8 @@ export default {
         completed: false,
         priority: 'medium',
         tags: [],
-        color: ''
+        color: '',
+        projectId: null
       };
       formVisible.value = true;
     };
@@ -768,9 +911,18 @@ export default {
     
     // 重置所有数据
     const resetApp = () => {
-      if (confirm('确定要重置应用吗？这将删除所有计划数据！')) {
+      if (confirm('确定要重置应用吗？这将删除所有计划数据和项目数据！')) {
         localStorage.removeItem('plans');
         plans.value = [];
+        
+        // 重置项目到默认值
+        localStorage.removeItem('projects');
+        projects.value = [
+          { id: 1, name: '个人', color: '#409EFF' },
+          { id: 2, name: '工作', color: '#67C23A' },
+          { id: 3, name: '学习', color: '#E6A23C' }
+        ];
+        saveProjectsToStorage();
         
         // 添加示例计划
         const examplePlan = {
@@ -782,7 +934,8 @@ export default {
           completed: false,
           priority: 'medium',
           tags: ['示例'],
-          color: '#4b90ff'
+          color: '#4b90ff',
+          projectId: 1 // 个人项目
         };
         plans.value = [examplePlan];
         savePlansToStorage();
@@ -790,7 +943,7 @@ export default {
         // 重置过滤条件
         resetFilters();
         
-        alert('应用已重置，添加了新的示例计划');
+        alert('应用已重置，添加了新的示例计划和默认项目');
       }
     };
     
@@ -812,8 +965,12 @@ export default {
     // 导出数据到文件
     const exportData = () => {
       try {
-        // 准备数据
-        const dataToExport = JSON.stringify(plans.value, null, 2);
+        // 准备数据 - 同时导出计划和项目
+        const dataToExport = JSON.stringify({
+          plans: plans.value,
+          projects: projects.value,
+          version: '1.0' // 添加版本信息便于将来兼容性处理
+        }, null, 2);
         
         // 创建下载链接
         const blob = new Blob([dataToExport], { type: 'application/json' });
@@ -831,7 +988,7 @@ export default {
         document.body.removeChild(link);
         
         // 显示成功消息
-        alert(`已成功导出 ${plans.value.length} 条计划数据到文件 ${fileName}`);
+        alert(`已成功导出 ${plans.value.length} 条计划数据和 ${projects.value.length} 个项目到文件 ${fileName}`);
       } catch (error) {
         console.error('导出数据失败:', error);
         alert('导出数据失败: ' + error.message);
@@ -888,19 +1045,31 @@ export default {
             console.log('文件内容长度:', content.length);
             
             const parsedData = JSON.parse(content);
-            console.log('解析后的数据类型:', Array.isArray(parsedData) ? '数组' : typeof parsedData);
+            console.log('解析后的数据类型:', typeof parsedData);
             
-            // 验证数据
+            // 验证数据格式 - 支持新旧两种格式
             if (Array.isArray(parsedData)) {
-              console.log('解析到的计划数量:', parsedData.length);
+              // 旧格式: 直接是计划数组
+              console.log('解析到的计划数量(旧格式):', parsedData.length);
               importData.value = parsedData;
               importPreview.value = {
-                count: parsedData.length
+                count: parsedData.length,
+                format: 'old'
               };
-              console.log('设置importData后的值:', importData.value);
+            } else if (typeof parsedData === 'object' && parsedData !== null && Array.isArray(parsedData.plans)) {
+              // 新格式: {plans: [...], projects: [...], version: '...'}
+              console.log('解析到的计划数量(新格式):', parsedData.plans.length);
+              console.log('解析到的项目数量:', parsedData.projects ? parsedData.projects.length : 0);
+              importData.value = parsedData;
+              importPreview.value = {
+                count: parsedData.plans.length,
+                projectCount: parsedData.projects ? parsedData.projects.length : 0,
+                format: 'new',
+                version: parsedData.version || '1.0'
+              };
             } else {
-              console.error('导入数据不是数组:', parsedData);
-              alert('导入失败: 文件格式不正确，应为包含计划数组的JSON');
+              console.error('导入数据格式不正确:', parsedData);
+              alert('导入失败: 文件格式不正确，应为计划数组或包含plans字段的对象');
               selectedFile.value = null;
             }
           } catch (error) {
@@ -938,8 +1107,28 @@ export default {
           return;
         }
         
-        // 处理日期
-        const processedData = importData.value.map(plan => ({
+        // 检查导入的数据结构
+        let importedPlans = [];
+        let importedProjects = [];
+        
+        // 判断是新格式还是旧格式
+        if (importData.value && typeof importData.value === 'object' && !Array.isArray(importData.value)) {
+          // 新格式：{plans: [...], projects: [...]}
+          console.log('检测到新格式的导入数据');
+          importedPlans = importData.value.plans || [];
+          importedProjects = importData.value.projects || [];
+        } else if (Array.isArray(importData.value)) {
+          // 旧格式：直接是计划数组
+          console.log('检测到旧格式的导入数据（仅包含计划）');
+          importedPlans = importData.value;
+        } else {
+          console.error('无法识别的数据格式');
+          alert('导入失败: 无法识别的数据格式');
+          return;
+        }
+        
+        // 处理计划数据
+        const processedPlans = importedPlans.map(plan => ({
           ...plan,
           id: plan.id || Date.now(),
           date: new Date(plan.date),
@@ -948,17 +1137,75 @@ export default {
           completed: !!plan.completed,
           priority: plan.priority || 'medium',
           tags: Array.isArray(plan.tags) ? plan.tags : [],
-          color: plan.color || ''
+          color: plan.color || '',
+          projectId: plan.projectId || null
         }));
         
-        console.log('处理后的数据:', processedData);
+        // 处理项目数据
+        const processedProjects = importedProjects.map(project => ({
+          ...project,
+          id: project.id || Date.now(),
+          name: project.name || '未命名项目',
+          color: project.color || '#409EFF'
+        }));
         
-        // 替换现有数据
-        plans.value = processedData;
+        console.log('处理后的计划数据:', processedPlans);
+        console.log('处理后的项目数据:', processedProjects);
+        
+        // 提示用户是否覆盖还是合并
+        const action = confirm(`导入包含 ${processedPlans.length} 条计划和 ${processedProjects.length} 个项目。\n\n点击"确定"完全替换现有数据\n点击"取消"将新数据合并到现有数据中`);
+        
+        if (action) {
+          // 完全替换
+          plans.value = processedPlans;
+          
+          // 只有当有项目数据时才替换项目
+          if (processedProjects.length > 0) {
+            projects.value = processedProjects;
+            saveProjectsToStorage();
+          }
+        } else {
+          // 合并数据 - 对计划使用ID去重
+          const existingIds = plans.value.map(p => p.id);
+          
+          // 筛选出新的计划（ID不在现有计划中）
+          const newPlans = processedPlans.filter(p => !existingIds.includes(p.id));
+          
+          // 更新同ID的计划，并保留新计划
+          const updatedPlans = [
+            ...plans.value.map(p => {
+              const imported = processedPlans.find(ip => ip.id === p.id);
+              return imported || p;
+            }),
+            ...newPlans
+          ];
+          
+          plans.value = updatedPlans;
+          
+          // 合并项目 - 对项目使用ID去重
+          if (processedProjects.length > 0) {
+            const existingProjectIds = projects.value.map(p => p.id);
+            
+            // 筛选出新的项目
+            const newProjects = processedProjects.filter(p => !existingProjectIds.includes(p.id));
+            
+            // 更新同ID的项目，并保留新项目
+            const updatedProjects = [
+              ...projects.value.map(p => {
+                const imported = processedProjects.find(ip => ip.id === p.id);
+                return imported || p;
+              }),
+              ...newProjects
+            ];
+            
+            projects.value = updatedProjects;
+            saveProjectsToStorage();
+          }
+        }
         
         // 自动选中第一个计划
-        if (processedData.length > 0) {
-          selectedPlan.value = { ...processedData[0] };
+        if (plans.value.length > 0) {
+          selectedPlan.value = { ...plans.value[0] };
         } else {
           selectedPlan.value = null;
         }
@@ -982,7 +1229,7 @@ export default {
         resetFilters();
         
         // 显示成功消息
-        alert(`已成功导入 ${processedData.length} 条计划数据`);
+        alert(`已成功导入 ${processedPlans.length} 条计划数据${processedProjects.length > 0 ? ` 和 ${processedProjects.length} 个项目` : ''}`);
       } catch (error) {
         console.error('导入数据失败:', error);
         alert('导入数据失败: ' + error.message);
@@ -1018,7 +1265,8 @@ export default {
           completed: false,
           priority: 'high',
           tags: ['工作', '紧急'],
-          color: '#ff6b6b'
+          color: '#ff6b6b',
+          projectId: 2 // 工作项目
         },
         {
           id: Date.now() + 1000,
@@ -1029,7 +1277,8 @@ export default {
           completed: true,
           priority: 'medium',
           tags: ['生活'],
-          color: '#55cc77'
+          color: '#55cc77',
+          projectId: 1 // 个人项目
         },
         {
           id: Date.now() + 2000,
@@ -1040,7 +1289,8 @@ export default {
           completed: false,
           priority: 'low',
           tags: ['学习', '长期'],
-          color: '#8159fe'
+          color: '#8159fe',
+          projectId: 3 // 学习项目
         }
       ];
       
@@ -1085,7 +1335,8 @@ export default {
               completed: !!plan.completed,
               priority: plan.priority || 'medium',
               tags: Array.isArray(plan.tags) ? plan.tags : [],
-              color: plan.color || ''
+              color: plan.color || '',
+              projectId: plan.projectId || null // 新增：保存项目ID
             }));
             
             // 直接赋值新数组
@@ -1152,6 +1403,146 @@ export default {
       }
     };
 
+    // 获取项目信息
+    const getProjectInfo = (projectId) => {
+      if (!projectId) return null;
+      return projects.value.find(p => p.id === projectId) || null;
+    };
+
+    // 显示项目管理对话框
+    const showProjectDialog = () => {
+      projectDialogVisible.value = true;
+      editingProject.value = null;
+      newProjectName.value = '';
+      newProjectColor.value = '#409EFF';
+    };
+
+    // 添加新项目
+    const addProject = () => {
+      if (!newProjectName.value.trim()) {
+        alert('请输入项目名称');
+        return;
+      }
+      
+      // 检查是否已存在同名项目
+      if (projects.value.some(p => p.name === newProjectName.value.trim())) {
+        alert('已存在同名项目');
+        return;
+      }
+      
+      // 创建新项目
+      const newProject = {
+        id: Date.now(),
+        name: newProjectName.value.trim(),
+        color: newProjectColor.value
+      };
+      
+      // 添加到项目列表
+      projects.value.push(newProject);
+      
+      // 清空输入
+      newProjectName.value = '';
+      newProjectColor.value = '#409EFF';
+      
+      // 保存项目列表到localStorage
+      saveProjectsToStorage();
+    };
+    
+    // 编辑项目
+    const startEditProject = (project) => {
+      editingProject.value = project;
+      newProjectName.value = project.name;
+      newProjectColor.value = project.color;
+    };
+    
+    // 更新项目
+    const updateProject = () => {
+      if (!editingProject.value) return;
+      
+      if (!newProjectName.value.trim()) {
+        alert('请输入项目名称');
+        return;
+      }
+      
+      // 检查是否已存在同名项目（排除当前编辑的项目）
+      if (projects.value.some(p => p.name === newProjectName.value.trim() && p.id !== editingProject.value.id)) {
+        alert('已存在同名项目');
+        return;
+      }
+      
+      // 更新项目
+      const index = projects.value.findIndex(p => p.id === editingProject.value.id);
+      if (index !== -1) {
+        projects.value[index].name = newProjectName.value.trim();
+        projects.value[index].color = newProjectColor.value;
+      }
+      
+      // 重置编辑状态
+      editingProject.value = null;
+      newProjectName.value = '';
+      newProjectColor.value = '#409EFF';
+      
+      // 保存项目列表到localStorage
+      saveProjectsToStorage();
+    };
+    
+    // 删除项目
+    const deleteProject = (project) => {
+      // 检查是否有计划使用该项目
+      const usedByPlans = plans.value.filter(p => p.projectId === project.id);
+      if (usedByPlans.length > 0) {
+        if (!confirm(`该项目已被 ${usedByPlans.length} 个计划使用，删除将会清除这些计划的项目关联，确定继续吗？`)) {
+          return;
+        }
+        
+        // 清除关联的计划
+        plans.value.forEach(p => {
+          if (p.projectId === project.id) {
+            p.projectId = null;
+          }
+        });
+        savePlansToStorage();
+      }
+      
+      // 删除项目
+      projects.value = projects.value.filter(p => p.id !== project.id);
+      
+      // 保存项目列表到localStorage
+      saveProjectsToStorage();
+    };
+    
+    // 保存项目列表到localStorage
+    const saveProjectsToStorage = () => {
+      try {
+        localStorage.setItem('projects', JSON.stringify(projects.value));
+      } catch (error) {
+        console.error('保存项目列表失败:', error);
+      }
+    };
+    
+    // 加载项目列表
+    const loadProjects = () => {
+      try {
+        const savedProjects = localStorage.getItem('projects');
+        if (savedProjects) {
+          const parsedProjects = JSON.parse(savedProjects);
+          if (Array.isArray(parsedProjects) && parsedProjects.length > 0) {
+            projects.value = parsedProjects;
+          }
+        }
+      } catch (error) {
+        console.error('加载项目列表失败:', error);
+      }
+    };
+
+    // 隐藏项目管理对话框
+    const hideProjectDialog = () => {
+      projectDialogVisible.value = false;
+      editingProject.value = null;
+      newProjectName.value = '';
+      newProjectColor.value = '#409EFF';
+    };
+
     return {
       plans,
       formVisible,
@@ -1195,14 +1586,33 @@ export default {
       availableTags,
       tagFilter,
       toggleTagFilter,
+      selectedTags, // 添加selectedTags到返回对象
       // 优先级相关
       priorityOptions,
       priorityFilter,
       getPriorityInfo,
+      selectedPriority, // 添加selectedPriority到返回对象
+      // 项目相关
+      selectedProject, // 添加selectedProject到返回对象
+      showCompleted, // 添加showCompleted到返回对象
       // 动画相关
       animating,
       // 过滤复位
-      resetFilters
+      resetFilters,
+      projects,
+      projectFilter,
+      getProjectInfo,
+      showProjectDialog,
+      projectDialogVisible,
+      editingProject,
+      newProjectName,
+      newProjectColor,
+      addProject,
+      startEditProject,
+      updateProject,
+      deleteProject,
+      hideProjectDialog,
+      allAvailableTags
     };
   }
 }
@@ -1416,6 +1826,12 @@ export default {
 
 .plan-priority {
   flex: 0 0 auto;
+}
+
+.plan-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .plan-date {
@@ -1765,6 +2181,76 @@ export default {
   width: 120px;
 }
 
+/* 项目筛选器样式 */
+.project-filter {
+  width: 120px;
+}
+
+.project-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* 计划中的项目标签样式 */
+.plan-project {
+  margin-top: 5px;
+}
+
+/* 项目管理对话框样式 */
+.project-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.project-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.project-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  margin-bottom: 10px;
+  background-color: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.project-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.project-title {
+  font-weight: 500;
+  font-size: 16px;
+  color: #333;
+}
+
+.project-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.projects-transition-group {
+  min-height: 50px;
+}
+
 /* 响应式设计 */
 @media (max-width: 1200px) {
   .main-content {
@@ -1879,5 +2365,31 @@ export default {
 
 .theme-toggle:hover {
   background: #e0e0e0;
+}
+
+.custom-tag-icon {
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.tag-filter {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 12px;
+}
+
+.tag-filter:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tag-filter.active {
+  font-weight: 500;
 }
 </style> 
