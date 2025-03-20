@@ -1,78 +1,111 @@
+/**
+ * 全局样式文件
+ * 
+ * 功能描述：
+ * 定义应用全局的基础样式、颜色方案和响应式设计规则
+ * 为整个应用提供一致的视觉风格和基础交互样式
+ * 
+ * 包含部分：
+ * > CSS变量定义：通过:root设置全局变量
+ * > 基础元素样式：设置a、body、h1、button等基础HTML元素样式
+ * > 应用容器样式：设置#app容器的基本布局
+ * > 响应式设计规则：针对不同颜色方案的适配
+ */
+
+/* 根元素样式变量 - 定义全局使用的字体、行高和颜色方案 */
 :root {
+  /* 字体系列设置 - 优先使用系统UI字体，逐级降级到通用字体 */
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
+  /* 颜色方案设置 - 支持明暗模式自动切换 */
   color-scheme: light dark;
+  /* 默认文本颜色 - 带透明度的白色，提高可读性 */
   color: rgba(255, 255, 255, 0.87);
+  /* 默认背景色 - 深色背景，适合暗色模式 */
   background-color: #242424;
 
+  /* 字体渲染优化 - 提高文本清晰度和可读性 */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 链接样式 - 设置默认和悬停状态的颜色及样式 */
 a {
   font-weight: 500;
   color: #646cff;
-  text-decoration: inherit;
+  text-decoration: inherit; /* 继承父元素的文本装饰，通常是无下划线 */
 }
+/* 链接悬停效果 - 颜色变亮提供视觉反馈 */
 a:hover {
   color: #535bf2;
 }
 
+/* 主体样式 - 设置基本布局和最小尺寸 */
 body {
   margin: 0;
   display: flex;
-  place-items: center;
+  place-items: center; /* 使用Grid布局特性简化居中 */
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100vh; /* 确保至少占满视口高度 */
 }
 
+/* 一级标题样式 - 设置大号字体和紧凑行高 */
 h1 {
   font-size: 3.2em;
-  line-height: 1.1;
+  line-height: 1.1; /* 较小的行高使大标题更加紧凑 */
 }
 
+/* 按钮基础样式 - 设置圆角、边框、内边距和过渡效果 */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
-  font-family: inherit;
+  font-family: inherit; /* 继承父元素的字体，保持一致性 */
   background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
+  cursor: pointer; /* 鼠标悬停时显示手型，提示可点击 */
+  transition: border-color 0.25s; /* 添加边框颜色变化的过渡效果 */
 }
+/* 按钮悬停效果 - 边框颜色变化提供交互反馈 */
 button:hover {
   border-color: #646cff;
 }
+/* 按钮焦点状态 - 添加焦点轮廓，提高可访问性 */
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* 卡片容器样式 - 提供统一的内边距 */
 .card {
   padding: 2em;
 }
 
+/* 应用主容器样式 - 设置居中和内边距 */
 #app {
-  /*max-width: 1280px;*/
-  margin: 0 auto;
+  /*max-width: 1280px;*/ /* 已注释掉，允许应用占用更宽的空间 */
+  margin: 0 auto; /* 水平居中 */
   padding: 2rem;
-  /*text-align: center;*/
+  /*text-align: center;*/ /* 已注释掉，允许内容自然对齐 */
 }
 
+/* 响应式设计 - 明亮模式的颜色方案适配 */
 @media (prefers-color-scheme: light) {
+  /* 根元素明亮模式设置 - 适应用户的系统颜色偏好 */
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    color: #213547; /* 深色文本，适合明亮背景 */
+    background-color: #ffffff; /* 白色背景，明亮模式的标准 */
   }
+  /* 明亮模式下链接悬停颜色 - 比默认状态稍浅 */
   a:hover {
     color: #747bff;
   }
+  /* 明亮模式下按钮背景色 - 浅灰色，与整体风格搭配 */
   button {
     background-color: #f9f9f9;
   }

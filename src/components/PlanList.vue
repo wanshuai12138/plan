@@ -653,54 +653,114 @@ export default {
       draggedItem.value = null;
     };
 
-    // 根据标签筛选计划
+    /**
+     * 根据多种条件筛选计划的计算属性
+     * 
+     * 功能描述：
+     * 根据用户选择的各种筛选条件（标签、优先级、项目、完成状态、日期范围）
+     * 对计划列表进行过滤，返回符合条件的计划数组
+     * 
+     * 返回值：
+     * 返回一个数组，包含符合所有筛选条件的计划对象
+     * 
+     * 实现原理：
+     * > 步骤1：从所有计划开始，作为初始筛选结果
+     * > 步骤2：如果有选中的标签，筛选包含这些标签的计划
+     * > 步骤3：如果有选中的优先级，筛选具有该优先级的计划
+     * > 步骤4：如果有选中的项目，筛选属于该项目的计划
+     * > 步骤5：根据完成状态过滤器（all/active/completed）筛选计划
+     * > 步骤6：如果设置了日期范围，筛选在该范围内的计划
+     * > 步骤7：返回最终筛选结果
+     * 
+     * 注意事项：
+     * 1. 筛选条件之间是"与"的关系，计划必须满足所有条件才会显示
+     * 2. 日期比较时会将字符串转换为Date对象进行比较
+     * 3. 标签筛选支持多选，只要包含任一选中标签即可
+     */
     const filteredPlans = computed(() => {
+      // 初始结果为所有计划
       let result = plans.value;
       
-      // 按标签筛选
+      // 按标签筛选 - 只显示包含选中标签的计划
       if (selectedTags.value.length > 0) {
         result = result.filter(plan => {
           // 检查计划是否包含任何选中的标签
+          // 只要计划包含任一选中的标签，就会返回true
           return selectedTags.value.some(tag => {
-            // 如果是预设标签，直接检查
+            // 检查计划的标签是否包含当前选中的标签
+            // 确保plan.tags存在防止出错
             if (availableTags.value.some(t => t.name === tag)) {
-              return plan.tags.includes(tag);
+              return plan.tags && plan.tags.includes(tag);
             }
-            // 如果是自定义标签，检查是否在自定义标签列表中
-            return plan.tags.includes(tag);
+            return plan.tags && plan.tags.includes(tag);
           });
         });
       }
       
-      // 按优先级筛选
+      // 按优先级筛选 - 只显示特定优先级的计划
       if (selectedPriority.value) {
+        // 筛选优先级与选中优先级匹配的计划
         result = result.filter(plan => plan.priority === selectedPriority.value);
       }
       
-      // 按项目筛选
+      // 按项目筛选 - 只显示特定项目的计划
       if (selectedProject.value) {
-        result = result.filter(plan => plan.projectId === selectedProject.value);
+        // 将计划的projectId转为字符串再比较，确保类型一致
+        result = result.filter(plan => String(plan.projectId) === selectedProject.value);
       }
       
       // 按完成状态筛选
-      if (showCompleted.value === false) {
+      if (filter.value === 'active') {
+        // 当过滤器为'active'时，只显示未完成的计划
         result = result.filter(plan => !plan.completed);
+      } else if (filter.value === 'completed') {
+        // 当过滤器为'completed'时，只显示已完成的计划
+        result = result.filter(plan => plan.completed);
       }
       
-      // 按日期筛选
-      if (dateRange.value && dateRange.value.length === 2) {
-        const startDate = new Date(dateRange.value[0]);
-        const endDate = new Date(dateRange.value[1]);
+      // 按日期范围筛选 - 只显示在日期范围内的计划
+      if (dateFilter.value && dateFilter.value.length === 2) {
+        // 提取日期范围的开始和结束日期
+        const startDate = new Date(dateFilter.value[0]);
+        const endDate = new Date(dateFilter.value[1]);
+        
+        // 筛选日期在范围内的计划
         result = result.filter(plan => {
           const planDate = new Date(plan.date);
+          // 计划日期需要大于等于开始日期且小于等于结束日期
           return planDate >= startDate && planDate <= endDate;
         });
       }
       
+      // 返回最终筛选结果
       return result;
     });
 
-    // 获取所有可用的标签（包括预设标签和自定义标签）
+    /**
+     * 获取所有可用的标签（包括预设标签和自定义标签）
+     * 
+     * 功能描述：
+     * 收集并合并所有可用的标签，包括系统预设的标签和用户自定义的标签
+     * 用于在标签筛选器中显示所有可选的标签选项
+     * 
+     * 返回值：
+     * 返回一个数组，包含所有标签对象，每个标签对象包含：
+     * - name: 标签名称
+     * - color: 标签颜色
+     * - isCustom: 是否为自定义标签
+     * 
+     * 实现原理：
+     * > 步骤1：创建一个Set用于存储自定义标签，避免重复
+     * > 步骤2：遍历所有计划，收集其中的标签
+     * > 步骤3：筛选出不在预设标签中的标签，作为自定义标签
+     * > 步骤4：将自定义标签转换为标准格式（添加颜色和标识）
+     * > 步骤5：合并预设标签和自定义标签，返回完整列表
+     * 
+     * 注意事项：
+     * 1. 使用Set数据结构确保自定义标签不重复
+     * 2. 自定义标签默认使用绿色(#67c23a)作为颜色
+     * 3. 通过isCustom属性区分预设标签和自定义标签
+     */
     const allAvailableTags = computed(() => {
       // 获取所有计划中的自定义标签
       const customTags = new Set();
@@ -724,7 +784,43 @@ export default {
       ];
     });
     
-    // 保存计划
+    /**
+     * 保存计划数据
+     * 
+     * 功能描述：
+     * 保存或更新计划数据，包括新建计划和修改现有计划
+     * 自动处理数据的格式化和验证，确保数据的完整性和一致性
+     * 
+     * 参数说明：
+     * - plan: 对象类型，包含计划的所有信息
+     *   - id: 计划ID，新建时自动生成
+     *   - title: 计划标题
+     *   - date: 计划日期
+     *   - description: 计划描述
+     *   - markdownContent: Markdown格式的内容
+     *   - completed: 完成状态
+     *   - priority: 优先级
+     *   - tags: 标签数组
+     *   - color: 颜色
+     *   - projectId: 所属项目ID
+     * 
+     * 无返回值
+     * 
+     * 实现原理：
+     * > 步骤1：创建新的计划对象，确保所有必要字段都存在
+     * > 步骤2：处理日期格式，确保是有效的Date对象
+     * > 步骤3：检查是更新现有计划还是添加新计划
+     * > 步骤4：更新计划列表，保持响应式
+     * > 步骤5：如果当前选中了这个计划，同步更新选中状态
+     * > 步骤6：保存到本地存储
+     * > 步骤7：重置表单和过滤条件
+     * 
+     * 注意事项：
+     * 1. 使用Date.now()生成唯一ID
+     * 2. 确保所有必要字段都有默认值
+     * 3. 保持数据的响应式更新
+     * 4. 自动同步选中状态
+     */
     const savePlan = (plan) => {
       console.log('准备保存计划:', plan);
       
@@ -1373,7 +1469,31 @@ export default {
       console.log('加载的计划数:', plans.value.length);
     };
     
-    // 保存数据到本地存储
+    /**
+     * 保存计划数据到本地存储
+     * 
+     * 功能描述：
+     * 将当前的计划数据保存到浏览器的localStorage中
+     * 包含数据验证和错误处理机制，确保数据安全存储
+     * 
+     * 无参数
+     * 
+     * 实现原理：
+     * > 步骤1：验证数据格式，确保是数组类型
+     * > 步骤2：检查数据是否为空，避免意外清空
+     * > 步骤3：将数据转换为JSON字符串
+     * > 步骤4：清除旧的存储数据
+     * > 步骤5：保存新的数据
+     * > 步骤6：验证保存是否成功
+     * > 步骤7：如果主保存失败，尝试备用保存方法
+     * 
+     * 注意事项：
+     * 1. 使用try-catch处理可能的存储错误
+     * 2. 提供备用保存机制，防止数据丢失
+     * 3. 详细的日志记录，便于调试
+     * 4. 验证存储结果，确保数据完整性
+     * 5. 空数组检查，避免意外清空数据
+     */
     const savePlansToStorage = () => {
       try {
         // 安全检查
