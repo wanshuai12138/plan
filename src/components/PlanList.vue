@@ -70,6 +70,15 @@
           <el-icon><Upload /></el-icon> 导入
         </el-button>
         
+        <!-- 添加备份还原按钮 -->
+        <el-button @click="backupData" type="info" size="small">
+          <el-icon><DocumentCopy /></el-icon> 备份
+        </el-button>
+        
+        <el-button @click="restoreData" type="info" size="small">
+          <el-icon><RefreshRight /></el-icon> 还原
+        </el-button>
+        
         <el-button type="info" size="small" @click="importTestData">测试数据</el-button>
         
         <el-button @click="resetApp" type="danger" size="small">
@@ -424,7 +433,11 @@ import PlanItem from './PlanItem.vue';
 import PlanForm from './PlanForm.vue';
 import { marked } from 'marked';
 // 导入Element Plus需要的图标
-import { Upload, Download, Plus, Delete, Document, Edit, Calendar, Check, RefreshLeft, DocumentAdd, Rank, Collection, Sunny, Moon, Folder } from '@element-plus/icons-vue';
+import { 
+  Upload, Download, Plus, Delete, Document, Edit, Calendar, 
+  Check, RefreshLeft, DocumentAdd, Rank, Collection, Sunny, 
+  Moon, Folder, DocumentCopy, RefreshRight 
+} from '@element-plus/icons-vue';
 
 export default {
   name: 'PlanList',
@@ -446,7 +459,9 @@ export default {
     Collection,
     Sunny,
     Moon,
-    Folder
+    Folder,
+    DocumentCopy,
+    RefreshRight
   },
   setup() {
     console.log('PlanList组件初始化');
@@ -1543,6 +1558,91 @@ export default {
       newProjectColor.value = '#409EFF';
     };
 
+    // 备份数据到服务器
+    const backupData = async () => {
+      try {
+        // 准备要备份的数据
+        const backupData = {
+          plans: plans.value,
+          projects: projects.value,
+          version: '1.0',
+          backupTime: new Date().toISOString()
+        };
+
+        // 发送备份请求到服务器
+        const response = await fetch('/api/backup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(backupData)
+        });
+
+        if (!response.ok) {
+          throw new Error('备份失败');
+        }
+
+        const result = await response.json();
+        alert('数据备份成功！');
+      } catch (error) {
+        console.error('备份数据失败:', error);
+        alert('备份数据失败: ' + error.message);
+      }
+    };
+
+    // 从服务器还原数据
+    const restoreData = async () => {
+      try {
+        // 确认是否要还原
+        if (!confirm('确定要还原数据吗？这将覆盖当前的所有数据！')) {
+          return;
+        }
+
+        // 从服务器获取最新的备份数据
+        const response = await fetch('/api/restore');
+        if (!response.ok) {
+          throw new Error('获取备份数据失败');
+        }
+
+        const backupData = await response.json();
+        
+        // 验证数据格式
+        if (!backupData.plans || !Array.isArray(backupData.plans)) {
+          throw new Error('备份数据格式不正确');
+        }
+
+        // 更新计划数据
+        plans.value = backupData.plans.map(plan => ({
+          ...plan,
+          date: new Date(plan.date)
+        }));
+
+        // 更新项目数据（如果有）
+        if (backupData.projects && Array.isArray(backupData.projects)) {
+          projects.value = backupData.projects;
+          saveProjectsToStorage();
+        }
+
+        // 保存到本地存储
+        savePlansToStorage();
+
+        // 重置过滤条件
+        resetFilters();
+
+        // 自动选中第一个计划
+        if (plans.value.length > 0) {
+          selectedPlan.value = { ...plans.value[0] };
+        } else {
+          selectedPlan.value = null;
+        }
+
+        alert('数据还原成功！');
+      } catch (error) {
+        console.error('还原数据失败:', error);
+        alert('还原数据失败: ' + error.message);
+      }
+    };
+
     return {
       plans,
       formVisible,
@@ -1612,7 +1712,9 @@ export default {
       updateProject,
       deleteProject,
       hideProjectDialog,
-      allAvailableTags
+      allAvailableTags,
+      backupData,
+      restoreData,
     };
   }
 }
@@ -1681,6 +1783,10 @@ export default {
 .header-buttons .el-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.header-buttons .el-button:active {
+  transform: translateY(0);
 }
 
 .tag-filters {
